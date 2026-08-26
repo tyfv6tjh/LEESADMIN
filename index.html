@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin - License Key System</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', system-ui, sans-serif; }
+    body { background: #0b1120; color: #e2e8f0; min-height: 100vh; padding: 20px; }
+    .container { max-width: 900px; margin: 0 auto; }
+    h1 { text-align: center; font-size: 1.8rem; margin-bottom: 8px; background: linear-gradient(90deg, #38bdf8, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .subtitle { text-align: center; color: #94a3b8; margin-bottom: 30px; font-size: 0.95rem; }
+    .card { background: #1e293b; border-radius: 18px; padding: 26px; margin-bottom: 22px; border: 1px solid #334155; box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
+    .card h2 { font-size: 1.25rem; margin-bottom: 20px; }
+    label { display: block; font-size: 0.9rem; color: #94a3b8; margin-bottom: 6px; }
+    input, select { width: 100%; padding: 13px 15px; border-radius: 11px; border: 1px solid #475569; background: #0f172a; color: #f1f5f9; font-size: 1rem; outline: none; margin-bottom: 14px; }
+    input:focus, select:focus { border-color: #38bdf8; }
+    .btn { padding: 12px 24px; border: none; border-radius: 11px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+    .btn-primary { background: linear-gradient(90deg, #0ea5e9, #6366f1); color: white; }
+    .btn-success { background: linear-gradient(90deg, #10b981, #059669); color: white; }
+    .btn-danger { background: #ef4444; color: white; }
+    .btn:hover { transform: translateY(-2px); opacity: 0.95; }
+    .message { margin-top: 14px; padding: 13px; border-radius: 10px; text-align: center; display: none; font-size: 0.95rem; }
+    .message.show { display: block; }
+    .message.success { background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; color: #6ee7b7; }
+    .message.error { background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; color: #fca5a5; }
+    .list-item { display: flex; justify-content: space-between; align-items: center; background: #0f172a; padding: 13px 16px; border-radius: 11px; margin-bottom: 10px; border: 1px solid #334155; gap: 12px; }
+    .list-item .text { flex: 1; font-size: 0.95rem; }
+    .delete-btn { background: #ef4444; color: white; border: none; padding: 7px 14px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; }
+    .history-item { background: #0f172a; border: 1px solid #334155; border-radius: 13px; padding: 18px; margin-bottom: 14px; }
+    .history-header { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; font-size: 0.9rem; }
+    .history-header .key { color: #38bdf8; font-weight: 600; font-family: monospace; font-size: 1rem; }
+    .history-header .time { color: #94a3b8; }
+    .selected-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+    .tag { background: #334155; padding: 6px 13px; border-radius: 20px; font-size: 0.85rem; }
+    .empty, .loading { text-align: center; color: #64748b; padding: 25px; }
+    .footer { text-align: center; margin-top: 25px; color: #64748b; font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Admin Panel</h1>
+    <p class="subtitle">Keys banaye • Boxes add karein • History dekhein</p>
+
+    <!-- 1. License Keys -->
+    <div class="card">
+      <h2>🔑 License Keys Manage</h2>
+      <label>Naya License Key</label>
+      <input type="text" id="newKey" placeholder="Example: VIP-2026" autocomplete="off">
+      <button class="btn btn-primary" onclick="addLicenseKey()">Key Add Karo</button>
+      <div id="keyAddMessage" class="message"></div>
+      <div id="keysList" style="margin-top:16px;"></div>
+    </div>
+
+    <!-- 2. Add Boxes for Specific Key -->
+    <div class="card">
+      <h2>📦 Boxes Add Karo (Particular Key ke liye)</h2>
+      
+      <label>Kaunsi Key ke liye box add karna hai?</label>
+      <select id="selectedKeyForBox">
+        <option value="">-- Key Select Karo --</option>
+      </select>
+
+      <label>Line 1</label>
+      <input type="text" id="line1" placeholder="Pehli line" autocomplete="off">
+      
+      <label>Line 2</label>
+      <input type="text" id="line2" placeholder="Dusri line" autocomplete="off">
+      
+      <button class="btn btn-success" onclick="addBoxForKey()">Is Key ke liye Box Add Karo</button>
+      <div id="boxAddMessage" class="message"></div>
+
+      <div id="boxesForKeyList" style="margin-top:18px;"></div>
+    </div>
+
+    <!-- 3. History -->
+    <div class="card">
+      <h2>📋 Submissions History</h2>
+      <div id="historyList">
+        <div class="loading">History load ho rahi hai...</div>
+      </div>
+      <button class="btn btn-danger" onclick="clearHistory()" style="margin-top:12px;">Saari History Delete Karo</button>
+    </div>
+
+    <p class="footer">Firebase Realtime Database</p>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-app.js";
+    import { getDatabase, ref, set, get, push, remove, onValue } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCPmqtHu7l6rVSJSYdjSOlxGv3ikqczqSM",
+      authDomain: "tampotp-73b70.firebaseapp.com",
+      databaseURL: "https://tampotp-73b70-default-rtdb.firebaseio.com",
+      projectId: "tampotp-73b70",
+      storageBucket: "tampotp-73b70.firebasestorage.app",
+      messagingSenderId: "346771737337",
+      appId: "1:346771737337:web:10a11fb3c72a0607193028"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    // ========== LICENSE KEYS ==========
+    window.addLicenseKey = async function() {
+      const input = document.getElementById('newKey');
+      const key = input.value.trim().toUpperCase();
+      const msg = document.getElementById('keyAddMessage');
+
+      if (!key) {
+        showMsg(msg, 'Key likho!', 'error');
+        return;
+      }
+
+      try {
+        const snap = await get(ref(db, 'licenseKeys/' + key));
+        if (snap.exists()) {
+          showMsg(msg, 'Yeh key pehle se exist karti hai!', 'error');
+          return;
+        }
+
+        await set(ref(db, 'licenseKeys/' + key), { createdAt: Date.now() });
+        input.value = '';
+        showMsg(msg, `"${key}" successfully add ho gayi!`, 'success');
+        loadKeys();
+      } catch (err) {
+        showMsg(msg, 'Error: ' + err.message, 'error');
+      }
+    };
+
+    window.deleteKey = async function(key) {
+      if (!confirm(`"${key}" aur uske saare boxes delete karne hain?`)) return;
+      try {
+        await remove(ref(db, 'licenseKeys/' + key));
+        await remove(ref(db, 'keyBoxes/' + key));
+        loadKeys();
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    };
+
+    async function loadKeys() {
+      const list = document.getElementById('keysList');
+      const select = document.getElementById('selectedKeyForBox');
+
+      try {
+        const snap = await get(ref(db, 'licenseKeys'));
+        const keys = snap.exists() ? Object.keys(snap.val()) : [];
+
+        if (keys.length === 0) {
+          list.innerHTML = '<div class="empty">Koi License Key nahi hai</div>';
+        } else {
+          list.innerHTML = keys.map(key => `
+            <div class="list-item">
+              <div class="text" style="font-family:monospace; font-weight:600;">${key}</div>
+              <button class="delete-btn" onclick="deleteKey('${key}')">Delete</button>
+            </div>
+          `).join('');
+        }
+
+        select.innerHTML = '<option value="">-- Key Select Karo --</option>' +
+          keys.map(k => `<option value="${k}">${k}</option>`).join('');
+
+        select.onchange = function() {
+          loadBoxesForSelectedKey(this.value);
+        };
+      } catch (err) {
+        list.innerHTML = `<div class="empty">Error: ${err.message}</div>`;
+      }
+    }
+
+    // ========== BOXES ==========
+    window.addBoxForKey = async function() {
+      const key = document.getElementById('selectedKeyForBox').value;
+      const l1 = document.getElementById('line1').value.trim();
+      const l2 = document.getElementById('line2').value.trim();
+      const msg = document.getElementById('boxAddMessage');
+
+      if (!key) {
+        showMsg(msg, 'Pehle Key select karo!', 'error');
+        return;
+      }
+      if (!l1 || !l2) {
+        showMsg(msg, 'Dono lines bharo!', 'error');
+        return;
+      }
+
+      try {
+        const newBoxRef = push(ref(db, 'keyBoxes/' + key));
+        await set(newBoxRef, {
+          line1: l1,
+          line2: l2,
+          createdAt: Date.now()
+        });
+
+        document.getElementById('line1').value = '';
+        document.getElementById('line2').value = '';
+        showMsg(msg, 'Box successfully add ho gaya!', 'success');
+        loadBoxesForSelectedKey(key);
+      } catch (err) {
+        showMsg(msg, 'Error: ' + err.message, 'error');
+      }
+    };
+
+    window.deleteBox = async function(key, boxId) {
+      if (!confirm('Yeh box delete karna hai?')) return;
+      try {
+        await remove(ref(db, `keyBoxes/${key}/${boxId}`));
+        loadBoxesForSelectedKey(key);
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    };
+
+    async function loadBoxesForSelectedKey(key) {
+      const list = document.getElementById('boxesForKeyList');
+      if (!key) {
+        list.innerHTML = '';
+        return;
+      }
+
+      list.innerHTML = '<div class="loading">Boxes load ho rahe hain...</div>';
+
+      try {
+        const snap = await get(ref(db, 'keyBoxes/' + key));
+        const boxes = snap.exists() ? snap.val() : {};
+        const ids = Object.keys(boxes);
+
+        if (ids.length === 0) {
+          list.innerHTML = `<div class="empty">"${key}" ke liye abhi koi box nahi hai</div>`;
+          return;
+        }
+
+        list.innerHTML = `<h3 style="margin-bottom:12px; color:#94a3b8; font-size:1rem;">Boxes for: <span style="color:#38bdf8">${key}</span></h3>` +
+          ids.map(id => {
+            const box = boxes[id];
+            return `
+              <div class="list-item">
+                <div class="text">
+                  <strong>${box.line1}</strong><br>
+                  <span style="color:#94a3b8; font-size:0.9rem;">${box.line2}</span>
+                </div>
+                <button class="delete-btn" onclick="deleteBox('${key}', '${id}')">Delete</button>
+              </div>`;
+          }).join('');
+      } catch (err) {
+        list.innerHTML = `<div class="empty">Error: ${err.message}</div>`;
+      }
+    }
+
+    // ========== HISTORY ==========
+    function loadHistory() {
+      const list = document.getElementById('historyList');
+
+      onValue(ref(db, 'submissions'), (snap) => {
+        if (!snap.exists()) {
+          list.innerHTML = '<div class="empty">Abhi koi submission nahi aayi</div>';
+          return;
+        }
+
+        const data = snap.val();
+        const items = Object.keys(data).map(id => ({ id, ...data[id] }));
+        items.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+        list.innerHTML = items.map(item => `
+          <div class="history-item">
+            <div class="history-header">
+              <span class="key">🔑 ${item.key}</span>
+              <span class="time">📅 ${item.date} &nbsp; 🕒 ${item.time}</span>
+            </div>
+            <div class="selected-tags">
+              ${(item.items || []).map(i => `<span class="tag">${i}</span>`).join('')}
+            </div>
+          </div>
+        `).join('');
+      });
+    }
+
+    window.clearHistory = async function() {
+      if (!confirm('Saari history permanently delete karni hai?')) return;
+      try {
+        await remove(ref(db, 'submissions'));
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    };
+
+    function showMsg(el, text, type) {
+      el.innerHTML = text;
+      el.className = 'message show ' + type;
+      setTimeout(() => el.classList.remove('show'), 4000);
+    }
+
+    // Init
+    loadKeys();
+    loadHistory();
+  </script>
+</body>
+</html>
